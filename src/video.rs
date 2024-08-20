@@ -1,5 +1,5 @@
 use std::{process::{Command, ExitCode}, time::Duration};
-use crate::util::CommandOutputExt;
+use crate::util::{CommandOutputExt, CommandExt};
 
 /// Get all keyframes in the file, only works on video files!
 ///
@@ -88,7 +88,7 @@ fn find_keyframes(keyframes: &Vec<u64>, start_time: u64, end_time: u64) -> Resul
     }
 }
 
-pub fn cut_video(source: &str, dest: &str, start_time: u64, end_time: u64) -> ExitCode {
+pub fn cut_video(source: &str, dest: &str, start_time: u64, end_time: u64, dry_run: bool) -> ExitCode {
     let keyframes = get_keyframes(source, Some((start_time, end_time)))
         .expect(format!("Unable to get keyframes from {}", source).as_str());
 
@@ -131,10 +131,13 @@ pub fn cut_video(source: &str, dest: &str, start_time: u64, end_time: u64) -> Ex
         ]);
         cmd.arg(dest);
 
-        // TODO dry run make it a trait like .to_exitcode
-        cmd.status()
-            .expect("Error executing ffmpeg")
-            .to_exitcode()
+        if dry_run {
+            cmd.print_escaped_cmd()
+        } else {
+            cmd.status()
+                .expect("Error executing ffmpeg")
+                .to_exitcode()
+        }
     } else {
         todo!("Non keyframe cutting is not supported atm");
         // TODO if not exactly on keyframe then cut bigger then transcode to exact place

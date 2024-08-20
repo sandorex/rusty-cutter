@@ -21,3 +21,20 @@ impl CommandOutputExt for std::process::Output {
         self.status.to_exitcode()
     }
 }
+
+pub trait CommandExt {
+    /// Prints the command in readable and copy-able format
+    fn print_escaped_cmd(&self) -> std::process::ExitCode;
+}
+
+impl CommandExt for std::process::Command {
+    fn print_escaped_cmd(&self) -> std::process::ExitCode {
+        println!("(CMD) {:#?}", self.get_program());
+        for arg in self.get_args() {
+            println!("      {:#?}", arg);
+        }
+
+        std::process::ExitCode::SUCCESS
+    }
+}
+
