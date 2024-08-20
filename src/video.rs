@@ -8,13 +8,9 @@ fn get_keyframes(file: &str, region: Option<(u64, u64)>) -> Result<Vec<u64>, (St
     let mut args: Vec<String> = vec![];
 
     if let Some((start, end)) = region {
-        let start_float = Duration::from_micros(start).as_secs_f64();
-        let end_float = Duration::from_micros(end).as_secs_f64();
-
         // NOTE ffprobe does not care if the start is negative or end is after EOF
         args.extend([
-            // read only specified region and add 5s to start and end so keyframes must be found
-            "-read_intervals".into(), format!("{:0.5}%{:0.5}", start_float - 5.0, end_float + 5.0),
+            "-read_intervals".into(), format!("{}us%{}us", start.saturating_sub(5_000_000), end + 5_000_000),
         ]);
     }
 
@@ -61,7 +57,7 @@ fn get_keyframes(file: &str, region: Option<(u64, u64)>) -> Result<Vec<u64>, (St
     }
 }
 
-fn find_keyframes(keyframes: &Vec<u64>, start_time: u64, end_time: u64) -> Option<(u64, u64)> {
+fn find_keyframes(keyframes: &Vec<u64>, start_time: u64, end_time: u64) -> Result<(u64, u64), String> {
     // find keyframe that is closes to the start time but not after it
     let start_keyframe: Option<u64> = keyframes.iter()
         .filter(|x| start_time >= **x)
@@ -75,31 +71,74 @@ fn find_keyframes(keyframes: &Vec<u64>, start_time: u64, end_time: u64) -> Optio
         .nth(0);
 
     match (start_keyframe, end_keyframe) {
-        (Some(start), Some(end)) => Some((start, end)),
-        _ => None,
+        (Some(start), Some(end)) => Ok((start, end)),
+        (start, end) => {
+            let mut err_str: String = "".to_string();
+
+            if start.is_none() {
+                err_str += format!("Could not find keyframe for start time {}us\n", start_time).as_str();
+            }
+
+            if end.is_none() {
+                err_str += format!("Could not find keyframe for end time {}us", end_time).as_str();
+            }
+
+            Err(err_str)
+        }
     }
 }
 
-pub fn cut_video(file: &str, start_time: u64, end_time: u64) -> ExitCode {
-    let keyframes = get_keyframes(file, Some((start_time, end_time)))
-        .expect(format!("Unable to get keyframes from {}", file).as_str());
+pub fn cut_video(source: &str, dest: &str, start_time: u64, end_time: u64) -> ExitCode {
+    let keyframes = get_keyframes(source, Some((start_time, end_time)))
+        .expect(format!("Unable to get keyframes from {}", source).as_str());
 
-    let time_keyframes = find_keyframes(&keyframes, start_time, end_time);
+    dbg!(&keyframes);
 
-    dbg!(time_keyframes);
+    assert_ne!(keyframes.len(), 0, "Got zero keyframes");
 
-    // TODO
-    // find first closest frame
-    // find last closest frame
-    // if any of the frames is not exact on keyframe then do not use copy codec
+    let (start_keyframe, end_keyframe) = match find_keyframes(&keyframes, start_time, end_time) {
+        Ok(x) => x,
+        Err(x) => {
+            eprintln!("{}", x);
+            return ExitCode::FAILURE;
+        }
+    };
 
-    // Command::new("ffmpeg")
-    //     .args([
-    //         "-loglevel", "error",
-    //         // do not re-encode audio
-    //         "-vcodec", "copy",
-    //     ])
-    ExitCode::SUCCESS
+    assert!(start_keyframe <= end_keyframe, "Start keyframe is after the end keyframe");
+
+    // no transcoding can only be done if cutting is done at exactly the keyframe
+    let needs_transcoding = start_keyframe != start_time || end_keyframe != end_time;
+
+    dbg!(start_keyframe);
+    dbg!(end_keyframe);
+    dbg!(needs_transcoding);
+
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args([
+        // print only errors
+        "-loglevel", "error",
+        "-i", source,
+        // do not re-encode audio
+        "-acodec", "copy",
+    ]);
+
+    if !needs_transcoding {
+        // simple copy on keyframes
+        cmd.args(["-vcodec", "copy"]);
+        cmd.args([
+            "-ss".into(), format!("{}us", start_keyframe),
+            "-to".into(), format!("{}us", end_keyframe),
+        ]);
+        cmd.arg(dest);
+
+        // TODO dry run make it a trait like .to_exitcode
+        cmd.status()
+            .expect("Error executing ffmpeg")
+            .to_exitcode()
+    } else {
+        todo!("Non keyframe cutting is not supported atm");
+        // TODO if not exactly on keyframe then cut bigger then transcode to exact place
+    }
 }
 
 #[cfg(test)]
@@ -113,12 +152,12 @@ mod tests {
 
         assert_eq!(
             find_keyframes(&keyframes, 1_500_000, 2_500_000),
-            Some((0, 4_000_000))
+            Ok((0, 4_000_000))
         );
 
         assert_eq!(
             find_keyframes(&keyframes, 2_500_000, 2_500_000),
-            Some((2_000_000, 4_000_000))
+            Ok((2_000_000, 4_000_000))
         );
     }
 }

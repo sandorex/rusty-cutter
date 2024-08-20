@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use video::cut_video;
 
 fn main() -> ExitCode {
-    cut_video("video.mkv", 2_500_000, 11_000_000);
+    cut_video("video.mkv", "output.mkv", 2_000_000, 12_000_000);
     // let times = get_keyframes("video.mkv", Some((2.0, 10.0)));
     // dbg!(times);
 
