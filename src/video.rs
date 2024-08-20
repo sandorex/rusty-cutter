@@ -1,5 +1,5 @@
-use std::{process::Command, time::Duration};
-use crate::util::{CommandOutputExt, CommandExt};
+use std::{path::Path, process::Command, time::Duration};
+use crate::{cli::CutArgs, util::{CommandExt, CommandOutputExt}};
 
 /// Get all keyframes in the file, only works on video files!
 ///
@@ -95,7 +95,7 @@ fn cut_video_at_keyframe(source: &str, dest: &str, span: (u64, u64), dry_run: bo
     let mut cmd = Command::new("ffmpeg");
     cmd.args([
         // print only errors
-        "-loglevel", "error",
+        "-loglevel", "error", "-y",
         "-i", source,
         // do not re-encode audio
         "-acodec", "copy",
@@ -122,7 +122,7 @@ fn cut_video_between_keyframe(source: &str, dest: &str, span: (u64, u64), dry_ru
     let mut cmd = Command::new("ffmpeg");
     cmd.args([
         // print only errors
-        "-loglevel", "error",
+        "-loglevel", "error", "-y",
         "-i", source,
         // do not re-encode audio
         "-acodec", "copy",
@@ -142,12 +142,13 @@ fn cut_video_between_keyframe(source: &str, dest: &str, span: (u64, u64), dry_ru
     }
 }
 
-pub fn cut_video(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> Result<(), u8> {
+pub fn cut_video(source: &str, output: Option<String>, span: (u64, u64), dry_run: bool, force_align_keyframes: bool) -> Result<(), u8> {
+    // TODO this whole function is barely readable
     // TODO this should not panic but be plain error
     let keyframes = get_keyframes(source, Some(span))
         .expect(format!("Unable to get keyframes from {}", source).as_str());
 
-    assert_ne!(keyframes.len(), 0, "Got zero keyframes");
+    assert_ne!(keyframes.len(), 0, "Got zero keyframes from file {}", source);
 
     let (start_time, end_time) = span;
 
@@ -165,17 +166,22 @@ pub fn cut_video(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> R
     let needs_transcoding = start_keyframe != start_time || end_keyframe != end_time;
 
     // TODO make ffmpeg overwrite without asking!
-    if !needs_transcoding {
-        println!("Cutting video at keyframes");
-        cut_video_at_keyframe(source, dest, (start_time, end_time), dry_run)
-    } else {
-        // create temp file at same place as dest but with different name
-        let temp_file = {
-            let path = std::path::Path::new(dest);
-
-            // TODO this is very ugly and too many unwraps
-            format!("{}.temp.{}", path.file_stem().unwrap().to_str().unwrap(), path.extension().unwrap().to_str().unwrap())
+    if force_align_keyframes || !needs_transcoding {
+        let dest = match &output {
+            Some(x) => x.clone(),
+            None => add_suffix_to_file_path(source, format!("cut_{}_{}", start_keyframe, end_keyframe).as_str()),
         };
+
+        println!("Cutting video at keyframes");
+        cut_video_at_keyframe(source, &dest, (start_keyframe, end_keyframe), dry_run)
+    } else {
+        let dest = match &output {
+            Some(x) => x.clone(),
+            None => add_suffix_to_file_path(source, format!("cut_{}_{}", span.0, span.1).as_str()),
+        };
+
+        // create temp file at same place as dest but with different name
+        let temp_file = add_suffix_to_file_path(&dest, "temp");
 
         println!("Cutting video between keyframes (transcoding is required)");
 
@@ -185,10 +191,39 @@ pub fn cut_video(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> R
         println!("Cutting the resulting video to exact size");
 
         // cut and transcode the actual video
-        cut_video_between_keyframe(&temp_file, dest, (start_time, end_time), dry_run)
+        let result = cut_video_between_keyframe(&temp_file, &dest, (start_time, end_time), dry_run);
 
-        // TODO remove tempfile
+        // TODO remove tempfile even if something fails before, tempfile struct?
+        let _ = std::fs::remove_file(temp_file);
+
+        result
     }
+}
+
+/// Takes a file path and adds suffix before the extension
+fn add_suffix_to_file_path(file: &str, suffix: &str) -> String {
+    let path = Path::new(file);
+
+    match path.extension().map(|x| x.to_string_lossy()) {
+        // add suffix before extension
+        Some(ext) => format!("{}", path.with_extension(format!("{}.{}", suffix, ext)).to_string_lossy()),
+        // there is no extension (just so there is no panic)
+        None => format!("{}", path.with_extension(suffix).to_string_lossy()),
+    }
+}
+
+fn convert_time(time: f64) -> u64 {
+    Duration::from_secs_f64(time).as_micros().try_into().unwrap()
+}
+
+pub fn cut_video_cmd(dry_run: bool, args: CutArgs) -> Result<(), u8> {
+    // TODO this is temporary until i fgure out how to parse time in multiple formats from args
+    let span = (
+        convert_time(args.start_time),
+        convert_time(args.end_time),
+    );
+
+    cut_video(&args.source, args.output, span, dry_run, args.align_keyframe)
 }
 
 #[cfg(test)]
@@ -208,6 +243,36 @@ mod tests {
         assert_eq!(
             find_keyframes(&keyframes, 2_500_000, 2_500_000),
             Ok((2_000_000, 4_000_000))
+        );
+    }
+
+    /// Test if suffix is replaced properly
+    #[test]
+    fn add_suffix() {
+        use super::add_suffix_to_file_path;
+
+        // file without absolute path
+        assert_eq!(
+            add_suffix_to_file_path("file.txt", "temp"),
+            "file.temp.txt".to_string()
+        );
+
+        // file with absolute path
+        assert_eq!(
+            add_suffix_to_file_path("/etc/file.txt", "temp"),
+            "/etc/file.temp.txt".to_string()
+        );
+
+        // file without extension
+        assert_eq!(
+            add_suffix_to_file_path("/etc/file", "temp"),
+            "/etc/file.temp".to_string()
+        );
+
+        // multiple existing extensions
+        assert_eq!(
+            add_suffix_to_file_path("/file.txt.txt", "temp"),
+            "/file.txt.temp.txt".to_string()
         );
     }
 }
