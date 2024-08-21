@@ -14,8 +14,15 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum CliCommands {
+    // NOTE no command should operate on file in place, always output to a new one
+
+    // TODO rename into extract?
     /// Cut a segment of a video file into a new file
     Cut(CutArgs),
+
+    // TODO this should probably be the one that is called cut
+    /// Remove a segment of a video and save the rest into a new file
+    Trim,
 
     /// Split video file at specific point, or interval
     Split(SplitArgs),

@@ -4,10 +4,6 @@ version = "0.1.0"
 edition = "2021"
 default-run = "rcut"
 
-# [[bin]]
-# name = "rcut-gui"
-# path = "src/gui.rs"
-
 [[bin]]
 name = "rcut"
 path = "src/main.rs"
