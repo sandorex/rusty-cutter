@@ -149,25 +149,25 @@ mod tests {
         // file without absolute path
         assert_eq!(
             VideoFile { path: PathBuf::from("file.txt"), ..Default::default() }.new_with_suffix("temp"),
-            PathBuf::from("file.temp.txt")
+            "file.temp.txt".to_string()
         );
 
         // file with absolute path
         assert_eq!(
             VideoFile { path: PathBuf::from("/etc/file.txt"), ..Default::default() }.new_with_suffix("temp"),
-            PathBuf::from("/etc/file.temp.txt")
+            "/etc/file.temp.txt".to_string()
         );
 
         // file without extension
         assert_eq!(
             VideoFile { path: PathBuf::from("/etc/file"), ..Default::default() }.new_with_suffix("temp"),
-            PathBuf::from("/etc/file.temp")
+            "/etc/file.temp".to_string()
         );
 
         // multiple existing extensions
         assert_eq!(
             VideoFile { path: PathBuf::from("/file.txt.txt"), ..Default::default() }.new_with_suffix("temp"),
-            PathBuf::from("/file.txt.temp.txt")
+            "/file.txt.temp.txt".to_string()
         );
     }
 }

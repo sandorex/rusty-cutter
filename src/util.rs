@@ -48,11 +48,6 @@ impl CommandExt for std::process::Command {
     }
 }
 
-/// Convert float time
-pub fn time_from_f(time: f64) -> u64 {
-    std::time::Duration::from_secs_f64(time).as_micros().try_into().unwrap()
-}
-
 /// Simple struct to delete a file after it goes out of scope
 pub struct TempFile<'a>(pub &'a str);
 

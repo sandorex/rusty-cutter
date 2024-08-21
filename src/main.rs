@@ -12,11 +12,11 @@ fn main() -> ExitCode {
     let cli_args = cli::Cli::parse();
 
     use cli::CliCommands;
-    let result = match cli_args.cmd {
-        CliCommands::Cut(x) => cut_video_cmd(cli_args.dry_run, x),
+    let result: ExitResult = match cli_args.cmd {
+        CliCommands::Extract(x) => extract_video_cmd(cli_args.dry_run, x),
         _ => {
             dbg!(&cli_args);
-            todo!()
+            Ok(())
         },
     };
 
@@ -27,22 +27,14 @@ fn main() -> ExitCode {
     }
 }
 
-pub fn cut_video_cmd(dry_run: bool, args: cli::CutArgs) -> ExitResult {
-    use util::time_from_f;
-
-    // TODO this is temporary until i fgure out how to parse time in multiple formats from args
-    let span = (
-        time_from_f(args.start_time),
-        time_from_f(args.end_time),
-    );
-
+fn extract_video_cmd(dry_run: bool, args: cli::ExtractArgs) -> ExitResult {
     let vfile = video::VideoFile {
         path: PathBuf::from(args.source),
         dry_run,
     };
 
-    // TODO better suffix with time requested maybe?
+    // TODO add cut0 .. cut99 so you can just cut without naming them yourself
     let dest = args.output.unwrap_or_else(|| vfile.new_with_suffix("cut"));
 
-    vfile.extract_segment(span, args.align_keyframe, &dest)
+    vfile.extract_segment((args.start_time, args.end_time), args.align_keyframe, &dest)
 }

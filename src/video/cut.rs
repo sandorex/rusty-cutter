@@ -26,21 +26,19 @@ impl VideoFile {
             println!("Cutting video between keyframes (transcoding is required)");
 
             // cut the bigger part of the video to temp file
-            cut_video_at_keyframe(&self.path.to_string_lossy(), &temp_file.to_string_lossy(), keyframes, self.dry_run)?;
+            cut_video_at_keyframe(&self.path.to_string_lossy(), &temp_file, keyframes, self.dry_run)?;
 
             println!("Cutting the resulting video to exact size");
 
             // make sure the temp file is deleted later
-            let _ = util::TempFile(&temp_file.to_string_lossy());
+            let _x = util::TempFile(&temp_file);
 
             // cut and transcode the actual video
-            cut_video_between_keyframe(&temp_file.to_string_lossy(), &dest, region, self.dry_run)
+            cut_video_between_keyframe(&temp_file, &dest, region, self.dry_run)
         }
     }
 }
 
-/// This function is supposed to be used only on keyframes, non keyframe span produces
-/// unpredictable results
 fn cut_video_at_keyframe(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> Result<(), u8> {
     let mut cmd = Command::new("ffmpeg");
     cmd.args([
