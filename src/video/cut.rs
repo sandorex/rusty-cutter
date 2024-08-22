@@ -1,8 +1,21 @@
 use super::{Span, VideoFile};
 use crate::util::{self, command_extensions::*};
 
+const COMMON_FFMPEG_ARGS: &[&str] = &[
+    // print only errors
+    "-loglevel", "error",
+
+    // do not ask to overwrite
+    "-y",
+
+    // do not re-encode audio
+    "-acodec", "copy",
+];
+
 impl VideoFile {
     pub fn extract_segment(&self, region: Span, force_align_keyframes: bool, dest: &str) -> crate::ExitResult {
+        // TODO some files have high compression and there are not many keyframes, find a way to
+        // detect that so the user is warned
         let keyframes = match self.find_closest_keyframes(region) {
             Ok(x) => x,
             Err((err, code)) => {
@@ -18,7 +31,7 @@ impl VideoFile {
 
         if force_align_keyframes || !needs_transcoding {
             println!("Cutting video at keyframes");
-            cut_video_at_keyframe(&self.path.to_string_lossy(), dest, keyframes, self.dry_run)
+            segment_aligned(&self.path.to_string_lossy(), dest, keyframes, self.dry_run)
         } else {
             // create temp file at same place as dest but with different name
             let temp_file = self.new_with_suffix("temp");
@@ -26,31 +39,40 @@ impl VideoFile {
             println!("Cutting video between keyframes (transcoding is required)");
 
             // cut the bigger part of the video to temp file
-            cut_video_at_keyframe(&self.path.to_string_lossy(), &temp_file, keyframes, self.dry_run)?;
+            segment_aligned(&self.path.to_string_lossy(), &temp_file, keyframes, self.dry_run)?;
 
             println!("Cutting the resulting video to exact size");
 
             // make sure the temp file is deleted later
             let _x = util::TempFile(&temp_file);
 
+            // offset is difference between keyframe and actual wanted region
+            let offset: u64 = region.0.saturating_sub(keyframes.0);
+
+            // actually requested length of video (cutting off extra from keyframe)
+            let length: u64 = region.1 - region.0;
+
             // cut and transcode the actual video
-            cut_video_between_keyframe(&temp_file, &dest, region, self.dry_run)
+            segment_not_aligned(
+                &temp_file,
+                &dest,
+                (offset, offset + length),
+                self.dry_run
+            )
         }
     }
 }
 
-fn cut_video_at_keyframe(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> Result<(), u8> {
+/// Extract segment that is aligned on keyframes
+fn segment_aligned(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> Result<(), u8> {
     let mut cmd = Command::new("ffmpeg");
     cmd.args([
-        // print only errors
-        "-loglevel", "error", "-y",
         "-i", source,
-        // do not re-encode audio
-        "-acodec", "copy",
+        "-vcodec", "copy",
     ]);
+    cmd.args(COMMON_FFMPEG_ARGS);
 
     // simple copy on keyframes
-    cmd.args(["-vcodec", "copy"]);
     cmd.args([
         "-ss".into(), format!("{}us", span.0),
         "-to".into(), format!("{}us", span.1),
@@ -66,15 +88,11 @@ fn cut_video_at_keyframe(source: &str, dest: &str, span: (u64, u64), dry_run: bo
     }
 }
 
-fn cut_video_between_keyframe(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> Result<(), u8> {
+/// Extract segment that is not aligned at keyframes (transcoding is required)
+fn segment_not_aligned(source: &str, dest: &str, span: (u64, u64), dry_run: bool) -> Result<(), u8> {
     let mut cmd = Command::new("ffmpeg");
-    cmd.args([
-        // print only errors
-        "-loglevel", "error", "-y",
-        "-i", source,
-        // do not re-encode audio
-        "-acodec", "copy",
-    ]);
+    cmd.args(["-i", source]);
+    cmd.args(COMMON_FFMPEG_ARGS);
     cmd.args([
         "-ss".into(), format!("{}us", span.0),
         "-to".into(), format!("{}us", span.1),

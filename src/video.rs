@@ -1,6 +1,7 @@
 mod cut;
 
 use std::{path::PathBuf, time::Duration};
+
 use crate::util::command_extensions::*;
 
 pub type Span = (u64, u64);
@@ -34,24 +35,32 @@ impl VideoFile {
             ]);
         }
 
-        let cmd = Command::new("ffprobe")
-            .args([
-                "-loglevel", "error",
-                // there should always be just one stream
-                "-select_streams", "v:0",
-                // skip non key frames
-                "-skip_frame", "nokey",
-                // iterate frames
-                "-show_frames",
-                // print only frame time
-                "-show_entries", "frame=pts_time",
-                // use csv to print it one per line without any additional mess
-                "-of", "csv=print_section=0",
-            ])
-            .args(args)
-            .arg(&self.path)
-            .output()
-            .expect("Error executing ffprobe");
+        let cmd = {
+            let mut cmd = Command::new("ffprobe");
+            cmd.args([
+                    "-loglevel", "error",
+                    // there should always be just one stream
+                    "-select_streams", "v:0",
+                    // skip non key frames
+                    "-skip_frame", "nokey",
+                    // iterate frames
+                    "-show_frames",
+                    // print only frame time
+                    "-show_entries", "frame=pts_time",
+                    // use csv to print it one per line without any additional mess
+                    "-of", "json",
+                ]);
+            cmd.args(args);
+            cmd.arg(&self.path);
+
+            if self.dry_run {
+                let _ = cmd.print_escaped_cmd();
+            }
+
+            cmd
+                .output()
+                .expect("Error executing ffprobe")
+        };
 
         match cmd.to_exitcode() {
             Ok(_) => {
@@ -59,9 +68,16 @@ impl VideoFile {
                 let stdout = String::from_utf8_lossy(&cmd.stdout);
                 let mut times: Vec<u64> = vec![];
 
-                for line in stdout.lines() {
-                    // im panicking here as it truly should not happen unless something breaks
-                    let time_float = line.parse::<f64>().expect("Error parsing pts_time from ffprobe");
+                let data: serde_json::Value = serde_json::from_str(&stdout)
+                    .expect("Error while parsing json from ffprobe");
+
+                for frame in data["frames"].as_array().expect("Json data is not an array") {
+                    let pts_time = frame["pts_time"]
+                        .as_str()
+                        .expect("pts_time is not a string");
+
+                    // the panic here should not happen unless something truly breaks
+                    let time_float: f64 = pts_time.parse::<f64>().expect("Error parsing pts_time from json");
 
                     // im pretty sure u64 can store all the keyframes i can find in a real video..
                     let micros: u64 = Duration::from_secs_f64(time_float).as_micros().try_into().unwrap();

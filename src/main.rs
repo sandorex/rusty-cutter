@@ -11,6 +11,8 @@ pub type ExitResult = Result<(), u8>;
 fn main() -> ExitCode {
     let cli_args = cli::Cli::parse();
 
+    // TODO check if ffprobe and ffmpeg are available in PATH
+
     use cli::CliCommands;
     let result: ExitResult = match cli_args.cmd {
         CliCommands::Extract(x) => extract_video_cmd(cli_args.dry_run, x),

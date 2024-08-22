@@ -20,7 +20,7 @@ pub enum CliCommands {
     Extract(ExtractArgs),
 
     /// Remove a part of a video and save the rest into a new file
-    Trim,
+    Remove(RemoveArgs),
 
     /// Split video file at specific point, or interval
     Split(SplitArgs),
@@ -38,6 +38,23 @@ pub struct ExtractArgs {
     #[arg(short, long, default_value_t = false)]
     pub align_keyframe: bool,
 
+    /// Source file
+    pub source: String,
+
+    /// Start time of the segment in millis (for detailed format see help)
+    #[arg(value_parser = parse_time)]
+    pub start_time: u64,
+
+    /// End time of the segment in millis (for detailed format see help)
+    #[arg(value_parser = parse_time)]
+    pub end_time: u64,
+
+    /// File to output to (if not specified default suffix will be added to source name)
+    pub output: Option<String>,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct RemoveArgs {
     /// Source file
     pub source: String,
 

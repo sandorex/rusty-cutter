@@ -39,9 +39,17 @@ pub trait CommandExt {
 impl CommandExt for std::process::Command {
     /// Print the whole command with quotes around each argument
     fn print_escaped_cmd(&self) -> ExitResult {
-        println!("(CMD) {:#?}", self.get_program());
-        for arg in self.get_args() {
-            println!("      {:#?}", arg);
+        println!("(CMD) {:?} \\", self.get_program().to_string_lossy());
+        let mut iter = self.get_args();
+        while let Some(arg) = iter.next() {
+            print!("      {:?}", arg.to_string_lossy());
+
+            // do not add backslash on the last argument
+            if iter.len() != 0 {
+                print!(" \\");
+            }
+
+            println!();
         }
 
         Ok(())
