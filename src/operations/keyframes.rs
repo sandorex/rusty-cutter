@@ -67,16 +67,13 @@ pub fn get_keyframes(path: &Path, region: (Timestamp, Timestamp), offset: u64) -
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum KeyframeMatch {
-    /// Keyframe matched exactly
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
+pub enum KeyframeMatch {
+    /// Timemap matches keyframe exactly
     Exact(Timestamp),
 
-    /// Keyframe is between two keyframes
-    Between {
-        before: Timestamp,
-        after: Timestamp
-    },
+    /// Timemap is between two timestamps, first one being the one first one above
+    Between(Timestamp, Timestamp),
 }
 
 /// Finds keyframes that are equal to or larger than region
@@ -92,10 +89,10 @@ pub fn find_closest_keyframes(keyframes: &Vec<u64>, region: (Timestamp, Timestam
         if start == region.0 {
             KeyframeMatch::Exact(start)
         } else {
-            KeyframeMatch::Between {
-                before: start,
-                after: *keyframes.iter().nth_back(start_pos - 1).unwrap(),
-            }
+            KeyframeMatch::Between(
+                start,
+                *keyframes.iter().nth_back(start_pos - 1).unwrap(),
+            )
         }
     };
 
@@ -103,42 +100,25 @@ pub fn find_closest_keyframes(keyframes: &Vec<u64>, region: (Timestamp, Timestam
         .ok_or_else(|| anyhow!("Could not find end keyframe {}us", region.1))?;
 
     let end = {
-        let end = *keyframes.iter().nth(end_pos).unwrap();
+        let end = *keyframes.get(end_pos).unwrap();
         if end == region.1 {
             KeyframeMatch::Exact(end)
         } else {
-            KeyframeMatch::Between {
-                before: end,
-                after: *keyframes.iter().nth(end_pos + 1).unwrap(),
-            }
+            KeyframeMatch::Between(
+                // NOTE these are swapped as im finding the position larger than region
+                *keyframes.get(end_pos - 1).unwrap(),
+                end
+            )
         }
     };
 
     Ok((start, end))
 }
 
-// /// Finds keyframes that are equal to or smaller than region
-// pub fn find_inner_keyframes(keyframes: &Vec<u64>, region: (Timestamp, Timestamp)) -> Result<(Timestamp, Timestamp)> {
-//     // find keyframe that is closes to the start time but not after it
-//     let start_keyframe: Option<u64> = keyframes.iter()
-//         .filter(|x| region.0 <= **x)
-//         .cloned()
-//         .last();
-//
-//     // find keyframe that is closes to the end time but not before it
-//     let end_keyframe: Option<u64> = keyframes.iter()
-//         .filter(|x| region.1 >= **x)
-//         .cloned()
-//         .nth(0);
-//
-//     match (start_keyframe, end_keyframe) {
-//         (Some(start), Some(end)) => Ok((start, end)),
-//         _ => return Err(anyhow!("Could not find keyframes for region {}us - {}us\n", region.0, region.1)),
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
+    use crate::operations::keyframes::KeyframeMatch;
+
     use super::find_closest_keyframes;
 
     /// Test if keyframes are properly searched
@@ -148,12 +128,34 @@ mod tests {
 
         assert_eq!(
             find_closest_keyframes(&keyframes, (1_500_000, 2_500_000)).unwrap(),
-            (0, 4_000_000)
+            (
+                KeyframeMatch::Between(0, 2_000_000),
+                KeyframeMatch::Between(2_000_000, 4_000_000),
+            )
         );
 
         assert_eq!(
             find_closest_keyframes(&keyframes, (2_500_000, 2_500_000)).unwrap(),
-            (2_000_000, 4_000_000)
+            (
+                KeyframeMatch::Between(2_000_000, 4_000_000),
+                KeyframeMatch::Between(2_000_000, 4_000_000),
+            )
+        );
+
+        assert_eq!(
+            find_closest_keyframes(&keyframes, (2_000_000, 2_500_000)).unwrap(),
+            (
+                KeyframeMatch::Exact(2_000_000),
+                KeyframeMatch::Between(2_000_000, 4_000_000),
+            )
+        );
+
+        assert_eq!(
+            find_closest_keyframes(&keyframes, (1_500_000, 2_000_000)).unwrap(),
+            (
+                KeyframeMatch::Between(0, 2_000_000),
+                KeyframeMatch::Exact(2_000_000),
+            )
         );
     }
 }

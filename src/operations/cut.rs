@@ -1,6 +1,8 @@
 use crate::{operations::keyframes::{find_closest_keyframes, get_keyframes}, util::command_extensions::*, PathExt, Timestamp};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use anyhow::{Result, anyhow};
+
+use super::{concat_files, keyframes::KeyframeMatch};
 
 const COMMON_FFMPEG_ARGS: &[&str] = &[
     // print only errors
@@ -15,49 +17,68 @@ const COMMON_FFMPEG_ARGS: &[&str] = &[
 
 // TODO make region Option, Option, so it can trim end or beginning or a segment
 pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp)) -> Result<()> {
-    let keyframes_all = get_keyframes(path, region, 5_000_000)?;
+    let keyframes = get_keyframes(path, region, 5_000_000)?;
 
     // TODO some files have high compression and keyframes are very far apart, warn the user
-    let keyframes = find_closest_keyframes(&keyframes_all, region)?;
+    match find_closest_keyframes(&keyframes, region)? {
+        (KeyframeMatch::Exact(start), KeyframeMatch::Exact(end)) => {
+            // no transcoding needed
+            segment_aligned(path, dest, (start, end))
+        },
+        (start_m, end_m) => {
+            let mut files: Vec<PathBuf> = vec![];
 
-    assert!(keyframes.0 <= keyframes.1, "Start keyframe is after the end keyframe");
+            // cut head if needed
+            let start = match start_m {
+                KeyframeMatch::Between(before, after) => {
+                    // cut at keyframes
+                    let temp_dest = dest.with_prefix("head_extra.");
+                    segment_aligned(path, &temp_dest, (before, after))?;
 
-    // no transcoding is needed if keyframes align
-    let needs_transcoding = keyframes.0 != region.0 || keyframes.1 != region.1;
+                    files.push(dest.with_prefix("head."));
+                    let new_dest = files.last().unwrap();
 
-    if !needs_transcoding {
-        segment_aligned(path, dest, keyframes)
-    } else {
-        // it does not align
+                    // trim the cut to correct size, NOTE the time is starting from zero
+                    segment_not_aligned(&temp_dest, new_dest, (region.0 - before, region.0 - after))?;
 
-        // cut the aligning part
-        let temp1 = path.with_prefix("temp1");
+                    // TODO delete temp file
 
-        // segment_aligned(path, dest, span)
+                    after
+                },
+                KeyframeMatch::Exact(x) => x,
+            };
 
-        // create temp file at same place as dest but with different name
-        let temp_file = path.with_suffix("temp");
+            // cut tail if needed
+            let end = match end_m {
+                KeyframeMatch::Between(before, after) => {
+                    // cut at keyframes
+                    let temp_dest = dest.with_prefix("tail_extra.");
+                    segment_aligned(path, &temp_dest, (before, after))?;
 
-        // cut the bigger part of the video to temp file
-        segment_aligned(path, &temp_file, keyframes)?;
+                    files.push(dest.with_prefix("tail."));
+                    let new_dest = files.last().unwrap();
 
-        // offset is difference between keyframe and actual wanted region
-        let offset: u64 = region.0.saturating_sub(keyframes.0);
+                    // trim the cut to correct size, NOTE the time is starting from zero
+                    segment_not_aligned(&temp_dest, new_dest, (0, before - region.1))?;
 
-        // actually requested length of video (cutting off extra from keyframe)
-        let length: u64 = region.1 - region.0;
+                    // TODO delete temp file
 
-        // cut and transcode the actual video
-        segment_not_aligned(
-            &temp_file,
-            dest,
-            (offset, offset + length)
-        )?;
+                    before
+                },
+                KeyframeMatch::Exact(x) => x,
+            };
 
-        // remove the temp file
-        std::fs::remove_file(&temp_file)?;
+            // there should be either head or tail as exact keyframes are handled above
+            assert!(!files.is_empty());
 
-        Ok(())
+            files.push(dest.with_prefix("mid."));
+            let temp_dest = files.last().unwrap();
+            segment_aligned(path, temp_dest, (start, end))?;
+
+            concat_files(&files, dest)
+
+            // TODO delete files
+        },
     }
 }
 
