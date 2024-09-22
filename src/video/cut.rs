@@ -33,6 +33,29 @@ impl VideoFile {
             println!("Cutting video at keyframes");
             segment_aligned(&self.path.to_string_lossy(), dest, keyframes, self.dry_run)
         } else {
+            /*
+
+                the video
+            |-----------|
+
+            The wanted part
+              V
+            |--|--------|
+
+             keyframes in the file
+            |-|-|-|-|-|-|
+
+            cut 1
+            |-|
+
+            cut 2 and transcode it to precisely cut
+              |-|
+
+            concat together
+            |--|
+
+             */
+
             // create temp file at same place as dest but with different name
             let temp_file = self.new_with_suffix("temp");
 

@@ -4,12 +4,21 @@ version = "0.1.0"
 edition = "2021"
 default-run = "rcut"
 
+[lib]
+name = "librcut"
+path = "src/lib.rs"
+
 [[bin]]
 name = "rcut"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.89"
 clap = { version = "4.5.16", features = ["derive"] }
 regex = "1.10.6"
 serde_json = "1.0.125"
+
+[build-dependencies]
+anyhow = "*"
+vergen-git2 = { version = "1.0.1", features = [] }
 

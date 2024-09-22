@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand, Args};
 
 /// Wrapper around ffmpeg to do media file editing with minimal transcoding when possible
 #[derive(Parser, Debug)]
-#[command(name = "rcut", author, version, about)]
+#[command(name = env!("CARGO_BIN_NAME"), author, version = crate::FULL_VERSION, about)]
 pub struct Cli {
     /// Just print commands that would've been ran, do not modify filesystem
     #[arg(long)]
@@ -30,11 +30,15 @@ pub enum CliCommands {
 
     // /// Create overlay video from image
     // Overlay,
+
+    /// Probe file to see information about it
+    Probe(ProbeArgs),
 }
 
 #[derive(Args, Debug, Clone, Default)]
 pub struct ExtractArgs {
-    /// Force align time to keyframes (allows cutting without transcoding, but cuts wont be exact)
+    /// Force align time to keyframes (allows cutting without transcoding, but cuts may be longer
+    /// than requested)
     #[arg(short, long, default_value_t = false)]
     pub align_keyframe: bool,
 
@@ -125,6 +129,11 @@ pub struct ConcatArgs {
 //     /// File to output to (if not specified default suffix will be added to source name)
 //     pub output: Option<String>,
 // }
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct ProbeArgs {
+    pub file: String,
+}
 
 /// Parse time that is either a timestamp or integer with optional unit suffix
 pub fn parse_time(input: &str) -> Result<u64, String> {
