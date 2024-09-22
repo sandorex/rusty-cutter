@@ -13,11 +13,11 @@ fn main() -> anyhow::Result<()> {
     use librcut::MediaFragment;
 
     let x = MediaFragment::Sequence(vec![
-        MediaFragment::Video(PathBuf::from("/home/user/video.mkv")),
-        MediaFragment::VideoSegment { file: PathBuf::from("/home/user/video2.mkv"), span: (Some(1_000_000u64), None) },
+        // MediaFragment::Video(PathBuf::from("/home/user/video.mkv")),
+        MediaFragment::VideoSegment { file: PathBuf::from("recording.mkv"), span: (Some(1_000_000u64), Some(4_000_000u64)) },
     ]);
 
-    println!("got: {:#?}", x.apply(&PathBuf::from("/home/user/out.mkv")));
+    println!("got: {:#?}", x.apply(&PathBuf::from("out.mkv"))?);
 
     Ok(())
     // let cli_args = cli::Cli::parse();

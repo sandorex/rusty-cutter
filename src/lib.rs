@@ -3,9 +3,9 @@ mod operations;
 
 use util::PathExt;
 use std::path::{PathBuf, Path};
+use anyhow::{Context, Result};
 
 pub const FULL_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-", env!("VERGEN_GIT_DESCRIBE"));
-
 pub type Timestamp = u64;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -37,10 +37,10 @@ impl MediaFragment {
     /// Apply the operation and return path of the result
     ///
     /// The output file is suggestion where to output the file, may not be used
-    pub fn apply(&self, output_file: &Path) -> PathBuf {
+    pub fn apply(&self, output_file: &Path) -> Result<PathBuf> {
         match self {
             // NOTE video requires no work
-            Self::Video(x) => x.to_path_buf(),
+            Self::Video(x) => Ok(x.to_path_buf()),
 
             // sequence has to apply all other fragments then add them together
             // TODO this could benefit from multithreading
@@ -51,30 +51,26 @@ impl MediaFragment {
 
                 for fragment in fragments {
                     count += 1;
-                    let path = fragment.apply(
-                        &output_file.with_suffix(format!("seq{}", count).as_str())
-                    );
+                    let path = fragment.apply(&output_file.with_suffix(format!("seq{}", count).as_str()))?;
 
                     sequence_file += format!("file '{}'\n", path.to_string_lossy()).as_str();
                     // output_files.push(fragment.apply(&path));
                 }
 
                 // TODO remove the expect
-                std::fs::write("sequence.txt", &sequence_file).expect("Failed to write to file");
+                std::fs::write("sequence.txt", &sequence_file)
+                    .with_context(|| "Error while writing to sequence.txt")?;
 
                 // TODO concat with ffmpeg
                 // TODO delete temp files
 
-                output_file.to_path_buf()
+                Ok(output_file.to_path_buf())
             },
             x @ Self::VideoSegment { file, span: (start, end) } => {
-                // TODO figure out how to cut segment till the end without reading the file length,
-                // there is probably an option in ffmpeg
-                //
-                // TODO cut segment without care for the keyframe
-                // operations::extract_segment(file, (start.unwrap(), end.unwrap()), false, output_file);
-                println!("Segment {:#?}", x);
-                output_file.to_path_buf()
+                // TODO support option start and end
+                operations::extract_segment(file, output_file, (start.unwrap(), end.unwrap()))?;
+
+                Ok(output_file.to_path_buf())
             },
         }
     }

@@ -3,7 +3,7 @@ use std::path::{PathBuf, Path};
 #[allow(unused_imports)]
 pub mod command_extensions {
     pub use std::process::Command;
-    pub use super::{CommandExt, CommandOutputExt};
+    pub use super::CommandOutputExt;
 }
 
 pub type CommandExit = Result<(), u8>;
@@ -14,6 +14,8 @@ pub trait CommandOutputExt {
     ///
     /// Equal to `ExitCode::from(1)` in case of signal termination (or any exit code larger than 255)
     fn to_exitcode(&self) -> CommandExit;
+
+    // fn to_anyhow(&self) -> anyhow::Result<()>;
 }
 
 impl CommandOutputExt for std::process::ExitStatus {
@@ -25,38 +27,46 @@ impl CommandOutputExt for std::process::ExitStatus {
             x => Err(x),
         }
     }
+
+    // fn to_anyhow(&self) -> anyhow::Result<()> {
+    //     todo!()
+    // }
 }
 
 impl CommandOutputExt for std::process::Output {
     fn to_exitcode(&self) -> CommandExit {
         self.status.to_exitcode()
     }
+
+    // fn to_anyhow(&self) -> anyhow::Result<()> {
+    //     todo!()
+    // }
 }
 
-pub trait CommandExt {
-    /// Prints the command in readable and copy-able format
-    fn print_escaped_cmd(&self) -> CommandExit;
-}
-
-impl CommandExt for std::process::Command {
-    /// Print the whole command with quotes around each argument
-    fn print_escaped_cmd(&self) -> CommandExit {
-        println!("(CMD) {:?} \\", self.get_program().to_string_lossy());
-        let mut iter = self.get_args();
-        while let Some(arg) = iter.next() {
-            print!("      {:?}", arg.to_string_lossy());
-
-            // do not add backslash on the last argument
-            if iter.len() != 0 {
-                print!(" \\");
-            }
-
-            println!();
-        }
-
-        Ok(())
-    }
-}
+// pub trait CommandExt {
+//     /// Prints the command in readable and copy-able format
+//     fn print_escaped_cmd(&self) -> CommandExit;
+// }
+//
+// impl CommandExt for std::process::Command {
+//     /// Print the whole command with quotes around each argument
+//     fn print_escaped_cmd(&self) -> CommandExit {
+//         println!("(CMD) {:?} \\", self.get_program().to_string_lossy());
+//         let mut iter = self.get_args();
+//         while let Some(arg) = iter.next() {
+//             print!("      {:?}", arg.to_string_lossy());
+//
+//             // do not add backslash on the last argument
+//             if iter.len() != 0 {
+//                 print!(" \\");
+//             }
+//
+//             println!();
+//         }
+//
+//         Ok(())
+//     }
+// }
 
 pub trait PathExt {
     fn with_suffix(&self, suffix: &str) -> PathBuf;
@@ -94,13 +104,60 @@ impl PathExt for PathBuf {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-
     use crate::PathExt;
 
     #[test]
     fn path_ext_prefix_test() {
-        let path = Path::new("/etc/test.sh");
-        assert_eq!(path.with_suffix(".bak").as_path(), Path::new("/etc/test.bak.sh"));
+        // absolute path
+        assert_eq!(
+            Path::new("/etc/file.txt").with_prefix("temp."),
+            Path::new("/etc/temp.file.txt"),
+        );
+
+        // no path / parent
+        assert_eq!(
+            Path::new("file.txt").with_prefix("temp."),
+            Path::new("temp.file.txt"),
+        );
+
+        // root
+        assert_eq!(
+            Path::new("/file.txt").with_prefix("temp."),
+            Path::new("/temp.file.txt"),
+        );
+
+        // no extension
+        assert_eq!(
+            Path::new("file").with_prefix("temp."),
+            Path::new("temp.file"),
+        );
+    }
+
+    #[test]
+    fn path_ext_suffix_test() {
+        // file without absolute path
+        assert_eq!(
+            Path::new("file.txt").with_suffix("temp"),
+            Path::new("file.temp.txt"),
+        );
+
+        // file with absolute path
+        assert_eq!(
+            Path::new("/etc/file.txt").with_suffix("temp"),
+            Path::new("/etc/file.temp.txt"),
+        );
+
+        // file without extension
+        assert_eq!(
+            Path::new("/etc/file").with_suffix("temp"),
+            Path::new("/etc/file.temp"),
+        );
+
+        // multiple existing extensions
+        assert_eq!(
+            Path::new("/file.txt.txt").with_suffix("temp"),
+            Path::new("/file.txt.temp.txt"),
+        );
     }
 }
 

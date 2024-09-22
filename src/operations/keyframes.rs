@@ -4,40 +4,32 @@ use anyhow::{Result, anyhow};
 use crate::Timestamp;
 use crate::util::command_extensions::*;
 
-/// Get keyframes from the file, if region is supplied then limit it to that region
-pub fn get_keyframes(path: &Path, region: Option<(Timestamp, Timestamp)>) -> Result<Vec<u64>> {
-    let mut args: Vec<String> = vec![];
-
-    if let Some((start, end)) = region {
-        // NOTE ffprobe does not care if the start is negative or end is after EOF
-        args.extend([
-            // limit the reading to requested region
-            "-read_intervals".into(), format!("{}us%{}us", start, end),
-        ]);
-    }
-
+/// Get keyframes from the file
+pub fn get_keyframes(path: &Path, region: (Timestamp, Timestamp), offset: u64) -> Result<Vec<u64>> {
     let cmd = {
-        let mut cmd = Command::new("ffprobe");
-        cmd.args([
-                "-loglevel", "error",
-                // there should always be just one stream
-                "-select_streams", "v:0",
-                // skip non key frames
-                "-skip_frame", "nokey",
-                // iterate frames
-                "-show_frames",
-                // print only frame time
-                "-show_entries", "frame=pts_time",
-                // use csv to print it one per line without any additional mess
-                "-of", "json",
-            ]);
-        cmd.args(args);
-
-        // if self.dry_run {
-        //     let _ = cmd.print_escaped_cmd();
-        // }
-
-        cmd
+        Command::new("ffprobe")
+            .args([
+            "-loglevel", "error",
+            // there should always be just one stream
+            "-select_streams", "v:0",
+            // skip non key frames
+            "-skip_frame", "nokey",
+            // iterate frames
+            "-show_frames",
+            // print only frame time
+            "-show_entries", "frame=pts_time",
+            // use csv to print it one per line without any additional mess
+            "-of", "json",
+        ])
+            .args([
+            // limit the reading to requested region
+            "-read_intervals".into(), format!(
+                "{}us%{}us",
+                // i am adding offset here as keyframes are never at exactly the spot you need
+                region.0.saturating_sub(offset),
+                region.1.saturating_add(offset)),
+        ])
+            .arg(path)
             .output()
             .expect("Error executing ffprobe")
     };
@@ -68,53 +60,100 @@ pub fn get_keyframes(path: &Path, region: Option<(Timestamp, Timestamp)>) -> Res
             // the times may not be in correct order sometimes
             times.sort();
 
+            // save into cache and return reference
             Ok(times)
         }
-        Err(x) => Err(anyhow!("Error while running ffprobe on {:?} (exit code {}): \n{}", path, x, String::from_utf8(cmd.stderr.clone()).unwrap())),
+        Err(x) => Err(anyhow!("ffprobe exited with code {}: \n{}", x, String::from_utf8(cmd.stderr.clone()).unwrap())),
     }
 }
 
-fn find_keyframes(keyframes: &Vec<u64>, region: (Timestamp, Timestamp)) -> Result<(Timestamp, Timestamp)> {
-    // find keyframe that is closes to the start time but not after it
-    let start_keyframe: Option<u64> = keyframes.iter()
-        .filter(|x| region.0 >= **x)
-        .cloned()
-        .last();
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum KeyframeMatch {
+    /// Keyframe matched exactly
+    Exact(Timestamp),
 
-    // find keyframe that is closes to the end time but not before it
-    let end_keyframe: Option<u64> = keyframes.iter()
-        .filter(|x| region.1 <= **x)
-        .cloned()
-        .nth(0);
+    /// Keyframe is between two keyframes
+    Between {
+        before: Timestamp,
+        after: Timestamp
+    },
+}
 
-    match (start_keyframe, end_keyframe) {
-        (Some(start), Some(end)) => Ok((start, end)),
-        (start, end) => {
-            if start.is_none() {
-                return Err(anyhow!("Could not find keyframe for start time {}us\n", region.0));
+/// Finds keyframes that are equal to or larger than region
+pub fn find_closest_keyframes(keyframes: &Vec<u64>, region: (Timestamp, Timestamp)) -> Result<(KeyframeMatch, KeyframeMatch)> {
+    // TODO rewrite this bit more readable
+    // NOTE: the iterators are reveresed as position returns first element that the filter lambda
+    // returns true so i had to reverse so it found the closest one
+    let start_pos = keyframes.iter().rev().position(|&x| region.0 >= x)
+        .ok_or_else(|| anyhow!("Could not find start keyframe {}us", region.0))?;
+
+    let start = {
+        let start = *keyframes.iter().nth_back(start_pos).unwrap();
+        if start == region.0 {
+            KeyframeMatch::Exact(start)
+        } else {
+            KeyframeMatch::Between {
+                before: start,
+                after: *keyframes.iter().nth_back(start_pos - 1).unwrap(),
             }
-
-            if end.is_none() {
-                return Err(anyhow!("Could not find keyframe for end time {}us\n", region.1));
-            }
-
-            // this should not be reached
-            unreachable!()
         }
+    };
+
+    let end_pos = keyframes.iter().position(|&x| region.1 <= x)
+        .ok_or_else(|| anyhow!("Could not find end keyframe {}us", region.1))?;
+
+    let end = {
+        let end = *keyframes.iter().nth(end_pos).unwrap();
+        if end == region.1 {
+            KeyframeMatch::Exact(end)
+        } else {
+            KeyframeMatch::Between {
+                before: end,
+                after: *keyframes.iter().nth(end_pos + 1).unwrap(),
+            }
+        }
+    };
+
+    Ok((start, end))
+}
+
+// /// Finds keyframes that are equal to or smaller than region
+// pub fn find_inner_keyframes(keyframes: &Vec<u64>, region: (Timestamp, Timestamp)) -> Result<(Timestamp, Timestamp)> {
+//     // find keyframe that is closes to the start time but not after it
+//     let start_keyframe: Option<u64> = keyframes.iter()
+//         .filter(|x| region.0 <= **x)
+//         .cloned()
+//         .last();
+//
+//     // find keyframe that is closes to the end time but not before it
+//     let end_keyframe: Option<u64> = keyframes.iter()
+//         .filter(|x| region.1 >= **x)
+//         .cloned()
+//         .nth(0);
+//
+//     match (start_keyframe, end_keyframe) {
+//         (Some(start), Some(end)) => Ok((start, end)),
+//         _ => return Err(anyhow!("Could not find keyframes for region {}us - {}us\n", region.0, region.1)),
+//     }
+// }
+
+#[cfg(test)]
+mod tests {
+    use super::find_closest_keyframes;
+
+    /// Test if keyframes are properly searched
+    #[test]
+    fn find_outer_keyframes_test() {
+        let keyframes = vec![0, 2_000_000, 4_000_000, 6_000_000, 8_000_000];
+
+        assert_eq!(
+            find_closest_keyframes(&keyframes, (1_500_000, 2_500_000)).unwrap(),
+            (0, 4_000_000)
+        );
+
+        assert_eq!(
+            find_closest_keyframes(&keyframes, (2_500_000, 2_500_000)).unwrap(),
+            (2_000_000, 4_000_000)
+        );
     }
 }
-
-/// Find closest keyframes to the region, output will always be equal or larger than region
-pub fn find_closest_keyframes(path: &Path, region: (Timestamp, Timestamp)) -> Result<(Timestamp, Timestamp)> {
-    // add 5 seconds before and after region to make sure any keyframes are cought
-    let keyframes = get_keyframes(
-        path,
-        Some((
-            region.0.saturating_sub(5_000_000),
-            region.1.saturating_add(5_000_000)
-        ))
-    )?;
-
-    find_keyframes(&keyframes, region)
-}
-

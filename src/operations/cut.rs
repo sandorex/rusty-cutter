@@ -1,4 +1,4 @@
-use crate::{util::command_extensions::*, PathExt, Timestamp};
+use crate::{operations::keyframes::{find_closest_keyframes, get_keyframes}, util::command_extensions::*, PathExt, Timestamp};
 use std::path::Path;
 use anyhow::{Result, anyhow};
 
@@ -14,41 +14,26 @@ const COMMON_FFMPEG_ARGS: &[&str] = &[
 ];
 
 // TODO make region Option, Option, so it can trim end or beginning or a segment
-pub fn extract_segment(path: &Path, region: (Timestamp, Timestamp), force_align_keyframes: bool, dest: &Path) -> Result<()> {
+pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp)) -> Result<()> {
+    let keyframes_all = get_keyframes(path, region, 5_000_000)?;
+
     // TODO some files have high compression and keyframes are very far apart, warn the user
-    let keyframes = super::keyframes::find_closest_keyframes(path, region)?;
+    let keyframes = find_closest_keyframes(&keyframes_all, region)?;
 
     assert!(keyframes.0 <= keyframes.1, "Start keyframe is after the end keyframe");
 
     // no transcoding is needed if keyframes align
     let needs_transcoding = keyframes.0 != region.0 || keyframes.1 != region.1;
 
-    if force_align_keyframes || !needs_transcoding {
+    if !needs_transcoding {
         segment_aligned(path, dest, keyframes)
     } else {
-        /*
-            TODO
+        // it does not align
 
-           the video
-           |-----------|
+        // cut the aligning part
+        let temp1 = path.with_prefix("temp1");
 
-           The wanted part
-           V
-           |--|--------|
-
-           keyframes in the file
-           |-|-|-|-|-|-|
-
-           cut 1
-           |-|
-
-           cut 2 and transcode it to precisely cut
-           |-|
-
-           concat together
-           |--|
-
-*/
+        // segment_aligned(path, dest, span)
 
         // create temp file at same place as dest but with different name
         let temp_file = path.with_suffix("temp");
