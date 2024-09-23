@@ -15,7 +15,6 @@ const COMMON_FFMPEG_ARGS: &[&str] = &[
     "-acodec", "copy",
 ];
 
-// TODO make region Option, Option, so it can trim end or beginning or a segment
 pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp)) -> Result<()> {
     let keyframes = get_keyframes(path, region, 5_000_000)?;
 
@@ -39,7 +38,7 @@ pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp))
                     let new_dest = files.last().unwrap();
 
                     // trim the cut to correct size, NOTE the time is starting from zero
-                    segment_not_aligned(&temp_dest, new_dest, (region.0 - before, region.0 - after))?;
+                    segment_not_aligned(&temp_dest, new_dest, (region.0 - before, after - before))?;
 
                     // TODO delete temp file
 

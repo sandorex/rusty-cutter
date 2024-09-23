@@ -1,9 +1,10 @@
 mod util;
 mod operations;
 
+use operations::concat_files;
 use util::PathExt;
 use std::path::{PathBuf, Path};
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 pub const FULL_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-", env!("VERGEN_GIT_DESCRIBE"));
 pub type Timestamp = u64;
@@ -46,27 +47,39 @@ impl MediaFragment {
             // TODO this could benefit from multithreading
             Self::Sequence(fragments) => {
                 let mut count: u32 = 0;
-                // let mut output_files: Vec<PathBuf> = vec![];
-                let mut sequence_file: String = "".into();
+                let mut output_files: Vec<PathBuf> = vec![];
 
+                // adding seq prefix so there is no name clashes
                 for fragment in fragments {
                     count += 1;
-                    let path = fragment.apply(&output_file.with_suffix(format!("seq{}", count).as_str()))?;
-
-                    sequence_file += format!("file '{}'\n", path.to_string_lossy()).as_str();
-                    // output_files.push(fragment.apply(&path));
+                    let path = fragment.apply(&output_file.with_prefix(format!("seq{}.", count).as_str()))?;
+                    output_files.push(path);
                 }
 
-                // TODO remove the expect
-                std::fs::write("sequence.txt", &sequence_file)
-                    .with_context(|| "Error while writing to sequence.txt")?;
+                // concat the fragments
+                concat_files(&output_files[..], &output_file)?;
+
+                //
+                // let mut sequence_file: String = "".into();
+                //
+                // for fragment in fragments {
+                //     count += 1;
+                //     let path = fragment.apply(&output_file.with_prefix(format!("seq{}.", count).as_str()))?;
+                //
+                //     sequence_file += format!("file '{}'\n", path.to_string_lossy()).as_str();
+                //     // output_files.push(fragment.apply(&path));
+                // }
+                //
+                // // TODO remove the expect
+                // std::fs::write("sequence.txt", &sequence_file)
+                //     .with_context(|| "Error while writing to sequence.txt")?;
 
                 // TODO concat with ffmpeg
                 // TODO delete temp files
 
                 Ok(output_file.to_path_buf())
             },
-            x @ Self::VideoSegment { file, span: (start, end) } => {
+            Self::VideoSegment { file, span: (start, end) } => {
                 // TODO support option start and end
                 operations::extract_segment(file, output_file, (start.unwrap(), end.unwrap()))?;
 

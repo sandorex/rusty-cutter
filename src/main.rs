@@ -15,6 +15,7 @@ fn main() -> anyhow::Result<()> {
     let x = MediaFragment::Sequence(vec![
         // MediaFragment::Video(PathBuf::from("/home/user/video.mkv")),
         MediaFragment::VideoSegment { file: PathBuf::from("recording.mkv"), span: (Some(1_000_000u64), Some(4_000_000u64)) },
+        MediaFragment::VideoSegment { file: PathBuf::from("recording.mkv"), span: (Some(6_000_000u64), Some(12_000_000u64)) },
     ]);
 
     println!("got: {:#?}", x.apply(&PathBuf::from("out.mkv"))?);
