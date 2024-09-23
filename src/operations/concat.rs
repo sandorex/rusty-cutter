@@ -19,7 +19,18 @@ pub fn concat_files(files: &[impl Deref<Target=Path>], dest: &Path) -> Result<()
         .with_context(|| format!("Error while writing to {:?}", list_file))?;
 
     Command::new("ffmpeg")
-        .args(["-f", "concat", "-i"])
+        .args([
+            // print only errors
+            "-loglevel", "error",
+
+            // do not ask to overwrite
+            "-y",
+
+            "-f", "concat",
+
+            // use following file for the concat list
+            "-i"
+        ])
         .arg(&list_file)
         .args(["-c", "copy"])
         .arg(dest)

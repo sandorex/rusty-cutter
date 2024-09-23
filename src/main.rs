@@ -1,68 +1,57 @@
-// mod cli;
-// mod util;
-// mod video;
+mod cli;
 
-use std::path::PathBuf;
-// use clap::Parser;
+use clap::Parser;
+use anyhow::{Context, Result};
+use cli::{Cli, CliCommands};
 
-/// Default return type for most functions
-// pub type ExitResult = Result<(), u8>;
+// TODO add command to show how frequent are the keyframes in a file for troublesome high
+// compression cases....
+// TODO create next available index for cuts so they are in order cut0 cut1 cut2... cut999
+// TODO check if ffprobe and ffmpeg are available in PATH
+fn main() -> Result<()> {
+    let cli_args = Cli::parse();
 
-fn main() -> anyhow::Result<()> {
-    use librcut;
-    use librcut::MediaFragment;
+    if let CliCommands::Chain { args } = &cli_args.cmd {
+        let argv0 = std::env::args().next().unwrap();
 
-    let x = MediaFragment::Sequence(vec![
-        // MediaFragment::Video(PathBuf::from("/home/user/video.mkv")),
-        MediaFragment::VideoSegment { file: PathBuf::from("recording.mkv"), span: (Some(1_000_000u64), Some(4_000_000u64)) },
-        MediaFragment::VideoSegment { file: PathBuf::from("recording.mkv"), span: (Some(6_000_000u64), Some(12_000_000u64)) },
-    ]);
+        // split commands by ';' to allow chaining
+        //
+        // convert to references and append argv0 for clap
+        let commands = args.split(|x| x == ";")
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|x| {
+                // this mess is cause argv0 needs to be set properly in clap
+                let mut v = x.iter().map(AsRef::<str>::as_ref).collect::<Vec<_>>();
+                v.insert(0, &argv0);
+                v
+            })
+            .collect::<Vec<_>>();
 
-    println!("got: {:#?}", x.apply(&PathBuf::from("out.mkv"))?);
+        // run each command in order
+        for command in commands {
+            let cli_args = Cli::try_parse_from(&command)
+                .with_context(|| format!("while parsing chain args {:?}", command.join(" ")))?;
 
-    Ok(())
-    // let cli_args = cli::Cli::parse();
+            handle_command(cli_args)?;
+        }
 
-    // TODO check if ffprobe and ffmpeg are available in PATH
-
-    // use cli::CliCommands;
-    // let result: ExitResult = match cli_args.cmd {
-    //     CliCommands::Extract(x) => extract_video_cmd(cli_args.dry_run, x),
-    //     CliCommands::Probe(x) => probe_cmd(x),
-    //     _ => {
-    //         println!("Not implemented");
-    //         dbg!(&cli_args);
-    //         Ok(())
-    //     },
-    // };
-
-    // // convert u8 to ExitCode
-    // match result {
-    //     Ok(_) => ExitCode::SUCCESS,
-    //     Err(x) => ExitCode::from(x),
-    // }
+        // everything went well quit early
+        return Ok(());
+    } else {
+        // handle regular commands
+        handle_command(cli_args)
+    }
 }
 
-// fn extract_video_cmd(dry_run: bool, args: cli::ExtractArgs) -> ExitResult {
-//     let vfile = video::VideoFile {
-//         path: PathBuf::from(args.source),
-//         dry_run,
-//     };
-//
-//     // TODO add cut0 .. cut99 so you can just cut without naming them yourself
-//     let dest = args.output.unwrap_or_else(|| vfile.new_with_suffix("cut"));
-//
-//     vfile.extract_segment((args.start_time, args.end_time), args.align_keyframe, &dest)
-// }
-//
-// fn probe_cmd(args: cli::ProbeArgs) -> ExitResult {
-//     let vfile = video::VideoFile {
-//         path: PathBuf::from(args.file),
-//         dry_run: false,
-//     };
-//
-//     let keyframes = vfile.get_keyframes(None).unwrap();
-//     println!("Total keyframes: {}", keyframes.len());
-//
-//     Ok(())
-// }
+fn handle_command(cmd: Cli) -> Result<()> {
+    match cmd.cmd {
+        // handled before this function is called
+        CliCommands::Chain { .. } => unreachable!(),
+
+        _ => dbg!(&cmd),
+    };
+
+    Ok(())
+}
+
