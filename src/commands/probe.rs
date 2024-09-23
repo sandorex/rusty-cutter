@@ -5,12 +5,22 @@ use librcut::get_keyframes;
 use crate::{cli, util};
 
 pub fn probe_file(args: cli::ProbeArgs) -> Result<()> {
+    // just print the keyframes if requested
+    if args.keyframes {
+        let keyframes = get_keyframes(&args.input, None, 0)?;
+        for i in keyframes {
+            println!("{}", i);
+        }
+
+        return Ok(());
+    }
+
     let millis = args.sample_size.as_millis();
 
     println!("Probing file {:?}:", args.input);
     println!("Sample size: {}ms", millis);
 
-    let keyframes = get_keyframes(&args.input, (0, args.sample_size.as_micros().try_into().unwrap()), 0)?;
+    let keyframes = get_keyframes(&args.input, Some((0, args.sample_size.as_micros())), 0)?;
 
     // calculate avg spacing between frames
     let avg_diff = {

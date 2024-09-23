@@ -16,7 +16,7 @@ const COMMON_FFMPEG_ARGS: &[&str] = &[
 ];
 
 pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=Path>, region: (Timestamp, Timestamp)) -> Result<()> {
-    let keyframes = get_keyframes(&source, region, 5_000_000)?;
+    let keyframes = get_keyframes(&source, Some(region), 5_000_000)?;
 
     // TODO some files have high compression and keyframes are very far apart, warn the user
     match find_closest_keyframes(&keyframes, region)? {

@@ -6,32 +6,36 @@ use crate::util::extensions::command_extensions::*;
 
 // TODO get the keyframes only around the keyframe, the ones in between are useless
 /// Get keyframes from the file
-pub fn get_keyframes(path: &Path, region: (Timestamp, Timestamp), offset: u128) -> Result<Vec<Timestamp>> {
+pub fn get_keyframes(path: &Path, region: Option<(Timestamp, Timestamp)>, offset: u128) -> Result<Vec<Timestamp>> {
     let cmd = {
-        Command::new("ffprobe")
-            .args([
-                "-loglevel", "error",
-                // there should always be just one stream
-                "-select_streams", "v:0",
-                // skip non key frames
-                "-skip_frame", "nokey",
-                // iterate frames
-                "-show_frames",
-                // print only frame time
-                "-show_entries", "frame=pts_time",
-                // use csv to print it one per line without any additional mess
-                "-of", "json",
-            ])
-            .args([
+        let mut cmd = Command::new("ffprobe");
+        cmd.args([
+            "-loglevel", "error",
+            // there should always be just one stream
+            "-select_streams", "v:0",
+            // skip non key frames
+            "-skip_frame", "nokey",
+            // iterate frames
+            "-show_frames",
+            // print only frame time
+            "-show_entries", "frame=pts_time",
+            // use csv to print it one per line without any additional mess
+            "-of", "json",
+        ]);
+
+        if let Some(time) = region {
+            cmd.args([
                 // limit the reading to requested region
                 "-read_intervals".into(), format!(
                     "{}us%{}us",
                     // i am adding offset here as keyframes are never at exactly the spot you need
-                    region.0.saturating_sub(offset),
-                    region.1.saturating_add(offset)
+                    time.0.saturating_sub(offset),
+                    time.1.saturating_add(offset)
                 ),
-            ])
-            .arg(path)
+            ]);
+        }
+
+        cmd.arg(path)
             .output()
             .expect("Error executing ffprobe")
     };

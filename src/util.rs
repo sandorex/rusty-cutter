@@ -61,6 +61,15 @@ pub fn get_file_length(file: impl Deref<Target=Path>) -> Result<Timestamp> {
                 .parse()
                 .expect("json 'duration' is not a valid float");
 
+            // let start_time: f64 = data.get("start_time")
+            //     .expect("json no key 'start_time' in 'format'")
+            //     .as_str()
+            //     .expect("json 'start_time' is not a string")
+            //     .parse()
+            //     .expect("json 'start_time' is not a valid float");
+            //
+            // dbg!(start_time, &duration);
+
             Ok(Duration::from_secs_f64(duration).as_micros())
         },
         Err(x) => Err(anyhow!("ffprobe exited with code {}: \n{}", x, String::from_utf8(cmd.stderr.clone()).unwrap())),

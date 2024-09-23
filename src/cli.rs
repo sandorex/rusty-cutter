@@ -67,37 +67,33 @@ pub struct SequenceArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct SplitArgs {
+    /// Use time as interval to cut the video into equal parts
+    #[arg(short, long)]
+    pub interval: bool,
+
     /// File to operate on
     pub source: PathBuf,
 
-    #[clap(flatten)]
-    pub group: TimeOrIntervalGroup,
+    /// Time to split at
+    pub time: humantime::Duration,
 
     // TODO this should be a format, cause there will be at least 2 files
     /// File to output to (if not specified default suffix will be added to source name)
     pub output: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, clap::Args)]
-#[group(required = true, multiple = false)]
-pub struct TimeOrIntervalGroup {
-    /// Interval to split the file at
-    #[arg(short, long)]
-    pub interval: Option<humantime::Duration>,
-
-    /// Time to split at
-    #[arg(short, long)]
-    pub time: Option<humantime::Duration>,
-}
-
 #[derive(Args, Debug, Clone)]
 pub struct ProbeArgs {
-    /// File to probe
-    pub input: PathBuf,
-
     /// Sample size to analyze, the longer it is the longer it will take
     #[arg(short, long, default_value = "120s")]
     pub sample_size: humantime::Duration,
+
+    /// Print only keyframes (the output can be very long)
+    #[arg(long)]
+    pub keyframes: bool,
+
+    /// File to probe
+    pub input: PathBuf,
 }
 
 #[cfg(test)]

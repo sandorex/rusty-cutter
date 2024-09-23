@@ -6,6 +6,7 @@ use clap::Parser;
 use anyhow::{Context, Result};
 use cli::{Cli, CliCommands};
 use commands::probe_file;
+use librcut::{split_at, split_every};
 
 // TODO add command to show how frequent are the keyframes in a file for troublesome high
 // compression cases....
@@ -53,23 +54,14 @@ fn handle_command(cmd: Cli) -> Result<()> {
     match cmd.cmd {
         // handled before this function is called
         CliCommands::Chain { .. } => unreachable!(),
-        // CliCommands::Split(cli::SplitArgs { source, group, output }) => {
-        //     // TODO should split be in librcut?
-        //     if let Some(time) = group.time {
-        //         librcut::MediaFragment::VideoSegment {
-        //             file: source.clone(),
-        //             span: (Some(0), Some(time.as_micros().try_into().unwrap())), // TODO timestamp should be
-        //                                                              // u128
-        //         }.apply(output.unwrap_or_else(|| &source.with_prefix("cut0.")))?;
-        //
-        //         Ok(())
-        //     } else if let Some(interval) = group.interval {
-        //         // TODO get length of the file?
-        //         todo!()
-        //     } else {
-        //         unreachable!();
-        //     }
-        // },
+        CliCommands::Split(cli::SplitArgs { interval, time, source, output }) => {
+            let path = output.as_ref().unwrap_or(&source);
+            if interval {
+                split_every(&source, path, time.as_micros())
+            } else {
+                split_at(&source, path, time.as_micros())
+            }
+        },
         CliCommands::Probe(x) => probe_file(x),
 
         _ => todo!(),
