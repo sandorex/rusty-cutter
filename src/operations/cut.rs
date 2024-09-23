@@ -1,8 +1,8 @@
-use crate::{operations::keyframes::{find_closest_keyframes, get_keyframes}, util::command_extensions::*, PathExt, Timestamp};
-use std::path::{Path, PathBuf};
+use crate::{operations::keyframes::{find_closest_keyframes, get_keyframes, KeyframeMatch}, Timestamp};
+use std::{ops::Deref, path::{Path, PathBuf}};
 use anyhow::{Result, anyhow};
-
-use super::{concat_files, keyframes::KeyframeMatch};
+use crate::concat_files;
+use crate::util::extensions::{PathExt, command_extensions::*};
 
 const COMMON_FFMPEG_ARGS: &[&str] = &[
     // print only errors
@@ -15,14 +15,14 @@ const COMMON_FFMPEG_ARGS: &[&str] = &[
     "-acodec", "copy",
 ];
 
-pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp)) -> Result<()> {
-    let keyframes = get_keyframes(path, region, 5_000_000)?;
+pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=Path>, region: (Timestamp, Timestamp)) -> Result<()> {
+    let keyframes = get_keyframes(&source, region, 5_000_000)?;
 
     // TODO some files have high compression and keyframes are very far apart, warn the user
     match find_closest_keyframes(&keyframes, region)? {
         (KeyframeMatch::Exact(start), KeyframeMatch::Exact(end)) => {
             // no transcoding needed
-            segment_aligned(path, dest, (start, end))
+            segment_aligned(&source, &dest, (start, end))
         },
         (start_m, end_m) => {
             let mut files: Vec<PathBuf> = vec![];
@@ -32,7 +32,7 @@ pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp))
                 KeyframeMatch::Between(before, after) => {
                     // cut at keyframes
                     let temp_dest = dest.with_prefix("head_extra.");
-                    segment_aligned(path, &temp_dest, (before, after))?;
+                    segment_aligned(&source, &temp_dest, (before, after))?;
 
                     files.push(dest.with_prefix("head."));
                     let new_dest = files.last().unwrap();
@@ -52,7 +52,7 @@ pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp))
                 KeyframeMatch::Between(before, after) => {
                     // cut at keyframes
                     let temp_dest = dest.with_prefix("tail_extra.");
-                    segment_aligned(path, &temp_dest, (before, after))?;
+                    segment_aligned(&source, &temp_dest, (before, after))?;
 
                     files.push(dest.with_prefix("tail."));
                     let new_dest = files.last().unwrap();
@@ -72,7 +72,7 @@ pub fn extract_segment(path: &Path, dest: &Path, region: (Timestamp, Timestamp))
 
             files.push(dest.with_prefix("mid."));
             let temp_dest = files.last().unwrap();
-            segment_aligned(path, temp_dest, (start, end))?;
+            segment_aligned(&source, temp_dest, (start, end))?;
 
             concat_files(&files, dest)
 

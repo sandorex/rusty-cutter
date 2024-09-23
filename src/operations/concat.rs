@@ -1,8 +1,8 @@
 use std::{fs, ops::Deref, path::Path};
 use anyhow::{Result, anyhow, Context};
-use crate::util::command_extensions::*;
+use crate::util::extensions::command_extensions::*;
 
-pub fn concat_files(files: &[impl Deref<Target=Path>], dest: &Path) -> Result<()> {
+pub fn concat_files(files: &[impl Deref<Target=Path>], dest: impl Deref<Target=Path>) -> Result<()> {
     // println!("concatting {:#?}", files);
 
     let list_file = dest.with_extension("txt");
@@ -33,7 +33,7 @@ pub fn concat_files(files: &[impl Deref<Target=Path>], dest: &Path) -> Result<()
         ])
         .arg(&list_file)
         .args(["-c", "copy"])
-        .arg(dest)
+        .arg(dest.as_os_str())
         .status()
         .expect("Error executing ffmpeg")
         .to_exitcode()

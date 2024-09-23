@@ -1,3 +1,4 @@
+mod util;
 mod cli;
 mod commands;
 
@@ -46,10 +47,29 @@ fn main() -> Result<()> {
     }
 }
 
+// TODO create function for generating name with prefix and index cut1 cut2..etc
+
 fn handle_command(cmd: Cli) -> Result<()> {
     match cmd.cmd {
         // handled before this function is called
         CliCommands::Chain { .. } => unreachable!(),
+        // CliCommands::Split(cli::SplitArgs { source, group, output }) => {
+        //     // TODO should split be in librcut?
+        //     if let Some(time) = group.time {
+        //         librcut::MediaFragment::VideoSegment {
+        //             file: source.clone(),
+        //             span: (Some(0), Some(time.as_micros().try_into().unwrap())), // TODO timestamp should be
+        //                                                              // u128
+        //         }.apply(output.unwrap_or_else(|| &source.with_prefix("cut0.")))?;
+        //
+        //         Ok(())
+        //     } else if let Some(interval) = group.interval {
+        //         // TODO get length of the file?
+        //         todo!()
+        //     } else {
+        //         unreachable!();
+        //     }
+        // },
         CliCommands::Probe(x) => probe_file(x),
 
         _ => todo!(),

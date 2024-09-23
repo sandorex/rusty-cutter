@@ -68,13 +68,14 @@ pub struct SequenceArgs {
 #[derive(Args, Debug, Clone)]
 pub struct SplitArgs {
     /// File to operate on
-    pub source: String,
+    pub source: PathBuf,
 
     #[clap(flatten)]
-    group: TimeOrIntervalGroup,
+    pub group: TimeOrIntervalGroup,
 
+    // TODO this should be a format, cause there will be at least 2 files
     /// File to output to (if not specified default suffix will be added to source name)
-    pub output: Option<String>,
+    pub output: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, clap::Args)]
