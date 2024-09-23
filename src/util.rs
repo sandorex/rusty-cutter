@@ -14,8 +14,6 @@ pub trait CommandOutputExt {
     ///
     /// Equal to `ExitCode::from(1)` in case of signal termination (or any exit code larger than 255)
     fn to_exitcode(&self) -> CommandExit;
-
-    // fn to_anyhow(&self) -> anyhow::Result<()>;
 }
 
 impl CommandOutputExt for std::process::ExitStatus {
@@ -27,46 +25,13 @@ impl CommandOutputExt for std::process::ExitStatus {
             x => Err(x),
         }
     }
-
-    // fn to_anyhow(&self) -> anyhow::Result<()> {
-    //     todo!()
-    // }
 }
 
 impl CommandOutputExt for std::process::Output {
     fn to_exitcode(&self) -> CommandExit {
         self.status.to_exitcode()
     }
-
-    // fn to_anyhow(&self) -> anyhow::Result<()> {
-    //     todo!()
-    // }
 }
-
-// pub trait CommandExt {
-//     /// Prints the command in readable and copy-able format
-//     fn print_escaped_cmd(&self) -> CommandExit;
-// }
-//
-// impl CommandExt for std::process::Command {
-//     /// Print the whole command with quotes around each argument
-//     fn print_escaped_cmd(&self) -> CommandExit {
-//         println!("(CMD) {:?} \\", self.get_program().to_string_lossy());
-//         let mut iter = self.get_args();
-//         while let Some(arg) = iter.next() {
-//             print!("      {:?}", arg.to_string_lossy());
-//
-//             // do not add backslash on the last argument
-//             if iter.len() != 0 {
-//                 print!(" \\");
-//             }
-//
-//             println!();
-//         }
-//
-//         Ok(())
-//     }
-// }
 
 pub trait PathExt {
     fn with_suffix(&self, suffix: &str) -> PathBuf;

@@ -1,5 +1,5 @@
 mod util;
-mod operations;
+pub mod operations;
 
 use operations::concat_files;
 use util::PathExt;

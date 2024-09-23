@@ -1,8 +1,10 @@
 mod cli;
+mod commands;
 
 use clap::Parser;
 use anyhow::{Context, Result};
 use cli::{Cli, CliCommands};
+use commands::probe_file;
 
 // TODO add command to show how frequent are the keyframes in a file for troublesome high
 // compression cases....
@@ -48,10 +50,9 @@ fn handle_command(cmd: Cli) -> Result<()> {
     match cmd.cmd {
         // handled before this function is called
         CliCommands::Chain { .. } => unreachable!(),
+        CliCommands::Probe(x) => probe_file(x),
 
-        _ => dbg!(&cmd),
-    };
-
-    Ok(())
+        _ => todo!(),
+    }
 }
 

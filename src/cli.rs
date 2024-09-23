@@ -16,7 +16,7 @@ pub enum CliCommands {
 
     /// Chain together multiple commands delimited by ';'
     ///
-    /// Ex. `script cut file.mkv 20m 25m out.mkv \; concat file.mkv out.mkv`
+    /// Ex. `chain cut file.mkv 20m 25m out.mkv \; concat file.mkv out.mkv`
     Chain {
         // capture everything as it will be parsed again
         #[arg(required = true, num_args = 1.., use_value_delimiter = true)]
@@ -34,6 +34,10 @@ pub enum CliCommands {
 
     /// Probe file to see information about, useful to check keyframe frequency
     Probe(ProbeArgs),
+
+    // TODO command that overlays video or image
+    // TODO command that creates empty black screen video for timing
+    // TODO command that converts image into video
 }
 
 #[derive(Args, Debug, Clone)]
@@ -42,11 +46,9 @@ pub struct CutArgs {
     pub input: PathBuf,
 
     /// Start time of the segment (for detailed format see help)
-    // #[arg(value_parser = parse_time)]
     pub start_time: humantime::Duration,
 
     /// End time of the segment (for detailed format see help)
-    // #[arg(value_parser = parse_time)]
     pub end_time: humantime::Duration,
 
     /// File to output to (if not specified default suffix will be added to source name)
@@ -91,6 +93,10 @@ pub struct TimeOrIntervalGroup {
 pub struct ProbeArgs {
     /// File to probe
     pub input: PathBuf,
+
+    /// Sample size to analyze, the longer it is the longer it will take
+    #[arg(short, long, default_value = "120s")]
+    pub sample_size: humantime::Duration,
 }
 
 #[cfg(test)]
