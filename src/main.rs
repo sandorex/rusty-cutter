@@ -6,7 +6,8 @@ use clap::Parser;
 use anyhow::{Context, Result};
 use cli::{Cli, CliCommands};
 use commands::probe_file;
-use librcut::{split_at, split_every};
+use librcut::{concat_files, extract_segment, split_at, split_every};
+use util::extensions::PathExt;
 
 // TODO create next available index for cuts so they are in order cut0 cut1 cut2... cut999
 // TODO check if ffprobe and ffmpeg are available in PATH
@@ -49,13 +50,17 @@ fn main() -> Result<()> {
     }
 }
 
-// TODO create function for generating name with prefix and index cut1 cut2..etc
-
 fn handle_command(cmd: Cli) -> Result<()> {
     match cmd.cmd {
         // handled before this function is called
         CliCommands::Chain { .. } => unreachable!(),
-        // CliCommands::Cut()
+        CliCommands::Cut(cli::CutArgs { input, start_time, end_time, output }) => {
+            extract_segment(
+                input.as_ref(),
+                output.unwrap_or_else(|| input.with_prefix("cut.")),
+                (Some(start_time.as_micros()), Some(end_time.as_micros()))
+            )
+        },
         CliCommands::Split(cli::SplitArgs { interval, time, source, output }) => {
             let path = output.as_ref().unwrap_or(&source);
             if interval {
@@ -64,9 +69,8 @@ fn handle_command(cmd: Cli) -> Result<()> {
                 split_at(&source, path, time.as_micros())
             }
         },
+        CliCommands::Sequence(cli::SequenceArgs { output, input }) => concat_files(&input[..], output),
         CliCommands::Probe(x) => probe_file(x),
-
-        _ => todo!(),
     }
 }
 

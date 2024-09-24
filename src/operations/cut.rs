@@ -16,8 +16,6 @@ const COMMON_FFMPEG_ARGS: &[&str] = &[
 ];
 
 pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=Path>, span: (Option<Timestamp>, Option<Timestamp>)) -> Result<()> {
-    println!("cutting {:?} at {:?}", source.as_os_str(), span);
-
     let keyframes = get_keyframes(&source)?;
 
     match find_closest_keyframes(&keyframes, span)? {
