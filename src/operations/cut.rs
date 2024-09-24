@@ -15,11 +15,12 @@ const COMMON_FFMPEG_ARGS: &[&str] = &[
     "-acodec", "copy",
 ];
 
-pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=Path>, region: (Timestamp, Timestamp)) -> Result<()> {
-    let keyframes = get_keyframes(&source, Some(region), 5_000_000)?;
+pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=Path>, span: (Option<Timestamp>, Option<Timestamp>)) -> Result<()> {
+    println!("cutting {:?} at {:?}", source.as_os_str(), span);
 
-    // TODO some files have high compression and keyframes are very far apart, warn the user
-    match find_closest_keyframes(&keyframes, region)? {
+    let keyframes = get_keyframes(&source)?;
+
+    match find_closest_keyframes(&keyframes, span)? {
         (KeyframeMatch::Exact(start), KeyframeMatch::Exact(end)) => {
             // no transcoding needed
             segment_aligned(&source, &dest, (start, end))
@@ -29,7 +30,7 @@ pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=
 
             // cut head if needed
             let start = match start_m {
-                KeyframeMatch::Between(before, after) => {
+                KeyframeMatch::Between(before, target, after) => {
                     // cut at keyframes
                     let temp_dest = dest.with_prefix("head_extra.");
                     segment_aligned(&source, &temp_dest, (before, after))?;
@@ -38,7 +39,7 @@ pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=
                     let new_dest = files.last().unwrap();
 
                     // trim the cut to correct size, NOTE the time is starting from zero
-                    segment_not_aligned(&temp_dest, new_dest, (region.0 - before, after - before))?;
+                    segment_not_aligned(&temp_dest, new_dest, (target - before, after - before))?;
 
                     // TODO delete temp file
 
@@ -49,7 +50,7 @@ pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=
 
             // cut tail if needed
             let end = match end_m {
-                KeyframeMatch::Between(before, after) => {
+                KeyframeMatch::Between(before, target, after) => {
                     // cut at keyframes
                     let temp_dest = dest.with_prefix("tail_extra.");
                     segment_aligned(&source, &temp_dest, (before, after))?;
@@ -58,7 +59,7 @@ pub fn extract_segment(source: impl Deref<Target=Path>, dest: impl Deref<Target=
                     let new_dest = files.last().unwrap();
 
                     // trim the cut to correct size, NOTE the time is starting from zero
-                    segment_not_aligned(&temp_dest, new_dest, (0, before - region.1))?;
+                    segment_not_aligned(&temp_dest, new_dest, (0, after - target))?;
 
                     // TODO delete temp file
 

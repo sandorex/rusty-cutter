@@ -8,8 +8,6 @@ use cli::{Cli, CliCommands};
 use commands::probe_file;
 use librcut::{split_at, split_every};
 
-// TODO add command to show how frequent are the keyframes in a file for troublesome high
-// compression cases....
 // TODO create next available index for cuts so they are in order cut0 cut1 cut2... cut999
 // TODO check if ffprobe and ffmpeg are available in PATH
 fn main() -> Result<()> {
@@ -38,10 +36,13 @@ fn main() -> Result<()> {
                 .with_context(|| format!("while parsing chain args {:?}", command.join(" ")))?;
 
             handle_command(cli_args)?;
+
+            // split command output
+            println!();
         }
 
         // everything went well quit early
-        return Ok(());
+        Ok(())
     } else {
         // handle regular commands
         handle_command(cli_args)
