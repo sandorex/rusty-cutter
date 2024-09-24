@@ -7,6 +7,8 @@ pub mod extensions;
 /// Type representing timestamp inside the video
 pub type Timestamp = u128;
 
+// TODO try rewriting it but use frames to get last frame and then read time
+/// NOTE the result is not correct! do not trust it
 pub fn get_file_length(file: impl Deref<Target=Path>) -> Result<Timestamp> {
     // the output looks like this
     // {

@@ -17,8 +17,6 @@ pub fn split_every(source: &Path, dest_format: &Path, interval: Timestamp) -> Re
     let file_length = get_file_length(source)?;
     let file_count = file_length / interval;
 
-    dbg!(file_length, file_count);
-
     // cut first (mostly so i can utilize the automatic start/end finding)
     extract_segment(
         source,

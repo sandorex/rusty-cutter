@@ -102,21 +102,21 @@ pub enum KeyframeMatch {
 
     /// Timestamp is between two timestamps ordered as: before, target, after
     Between(Timestamp, Timestamp, Timestamp),
-
-    // // TODO
-    // /// Timestamp is off the boundary (either start or end), the boundary keyframe is returned
-    // Boundary(Timestamp)
 }
 
 pub fn find_closest_keyframes(keyframes: &[Timestamp], span: (Option<Timestamp>, Option<Timestamp>)) -> Result<(KeyframeMatch, KeyframeMatch)> {
-    // TODO rewrite this bit more readable
-    // NOTE: the iterators are reveresed as position returns first element that the filter lambda
-    // returns true so i had to reverse so it found the closest one
     let start = if let Some(time) = span.0 {
-        let start_pos = keyframes.iter().rev().position(|&x| time >= x)
+        let start_pos = keyframes
+            .iter()
+            .rev()
+            .position(|&x| time >= x)
             .ok_or_else(|| anyhow!("Could not find start keyframe {}us", time))?;
 
-        let start = *keyframes.iter().nth_back(start_pos).unwrap();
+        let start = *keyframes
+            .iter()
+            .nth_back(start_pos)
+            .unwrap();
+
         if start == time {
             KeyframeMatch::Exact(start)
         } else {
@@ -132,10 +132,15 @@ pub fn find_closest_keyframes(keyframes: &[Timestamp], span: (Option<Timestamp>,
     };
 
     let end = if let Some(time) = span.1 {
-        let end_pos = keyframes.iter().position(|&x| time <= x)
+        let end_pos = keyframes
+            .iter()
+            .position(|&x| time <= x)
             .ok_or_else(|| anyhow!("Could not find end keyframe {}us", time))?;
 
-        let end = *keyframes.get(end_pos).unwrap();
+        let end = *keyframes
+            .get(end_pos)
+            .unwrap();
+
         if end == time {
             KeyframeMatch::Exact(end)
         } else {

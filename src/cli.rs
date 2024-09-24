@@ -84,10 +84,6 @@ pub struct SplitArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct ProbeArgs {
-    /// Sample size to analyze, the longer it is the longer it will take
-    #[arg(short, long, default_value = "120s")]
-    pub sample_size: humantime::Duration,
-
     /// Print only keyframes (the output can be very long)
     #[arg(long)]
     pub keyframes: bool,

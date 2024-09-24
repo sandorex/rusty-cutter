@@ -55,6 +55,7 @@ fn handle_command(cmd: Cli) -> Result<()> {
     match cmd.cmd {
         // handled before this function is called
         CliCommands::Chain { .. } => unreachable!(),
+        // CliCommands::Cut()
         CliCommands::Split(cli::SplitArgs { interval, time, source, output }) => {
             let path = output.as_ref().unwrap_or(&source);
             if interval {

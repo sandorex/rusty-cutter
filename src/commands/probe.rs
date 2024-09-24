@@ -1,8 +1,6 @@
-use std::time::Duration;
 use anyhow::Result;
 use librcut::get_keyframes;
-
-use crate::{cli, util};
+use crate::{cli, util::get_file_length};
 
 pub fn probe_file(args: cli::ProbeArgs) -> Result<()> {
     // just print the keyframes if requested
@@ -14,8 +12,6 @@ pub fn probe_file(args: cli::ProbeArgs) -> Result<()> {
 
         return Ok(());
     }
-
-    let millis = args.sample_size.as_millis();
 
     println!("Probing file {:?}:", args.input);
 
@@ -33,14 +29,15 @@ pub fn probe_file(args: cli::ProbeArgs) -> Result<()> {
         sum / u128::try_from(diff.len()).unwrap()
     };
 
+    let length_micros = get_file_length(args.input)?;
+    let last_keyframe = *keyframes.iter().next_back().unwrap();
+
     println!("Total keyframes: {}", keyframes.len());
-    println!("Keyframe freq: 1/{}ms", millis / u128::try_from(keyframes.len()).unwrap());
+    println!("Keyframe freq: 1/{}ms", (length_micros / 1_000) / u128::try_from(keyframes.len()).unwrap());
     println!("Keyframe avg spacing: {}ms", avg_diff / 1_000);
 
-    println!(
-        "Duration: {}",
-        humantime::format_duration(Duration::from_micros(util::get_file_length(args.input)?.try_into().unwrap()))
-    );
+    println!("Duration (ffprobe): {}", length_micros);
+    println!("Duration (last keyframe): {}", last_keyframe);
 
     Ok(())
 }
