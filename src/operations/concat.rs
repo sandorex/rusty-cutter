@@ -3,8 +3,6 @@ use anyhow::{Result, anyhow, Context};
 use crate::util::extensions::command_extensions::*;
 
 pub fn concat_files(files: &[impl Deref<Target=Path>], dest: impl Deref<Target=Path>) -> Result<()> {
-    // println!("concatting {:#?}", files);
-
     let list_file = dest.with_extension("txt");
 
     // make the file up
@@ -40,8 +38,6 @@ pub fn concat_files(files: &[impl Deref<Target=Path>], dest: impl Deref<Target=P
         .map_err(|x| anyhow!("ffmpeg command failed with code: {}", x))?;
 
     // TODO remove leftover files
-
-    // ffmpeg -f concat -safe 0 -i mylist.txt -c copy output.wav
 
     Ok(())
 }

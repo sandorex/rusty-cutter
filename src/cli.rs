@@ -51,7 +51,7 @@ pub struct CutArgs {
     /// End time of the segment (for detailed format see help)
     pub end_time: humantime::Duration,
 
-    /// File to output to (if not specified default suffix will be added to source name)
+    /// File to output to (if not specified default prefix will be added to source name)
     pub output: Option<PathBuf>,
 }
 
@@ -78,7 +78,7 @@ pub struct SplitArgs {
     pub time: humantime::Duration,
 
     // TODO this should be a format, cause there will be at least 2 files
-    /// File to output to (if not specified default suffix will be added to source name)
+    /// File to output to (if not specified default prefix will be added to source name)
     pub output: Option<PathBuf>,
 }
 

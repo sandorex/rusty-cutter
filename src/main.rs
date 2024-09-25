@@ -42,10 +42,10 @@ fn main() -> Result<()> {
             println!();
         }
 
-        // everything went well quit early
+        // everything went well
         Ok(())
     } else {
-        // handle regular commands
+        // handle regular single command
         handle_command(cli_args)
     }
 }

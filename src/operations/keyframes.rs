@@ -1,29 +1,28 @@
+use std::cell::RefCell;
 use std::ffi::OsString;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Mutex;
 use std::time::Duration;
 use anyhow::{Result, anyhow};
 use crate::Timestamp;
 use crate::util::extensions::command_extensions::*;
 use std::collections::HashMap;
 
-// TODO remove region and offset
 /// Get keyframes from the file
 pub fn get_keyframes(path: &Path) -> Result<Rc<Vec<Timestamp>>> {
-    static mut CACHE: Option<Mutex<HashMap<OsString, Rc<Vec<Timestamp>>>>> = None;
+    thread_local! {
+        static CACHE: RefCell<HashMap<OsString, Rc<Vec<Timestamp>>>> = RefCell::new(HashMap::new());
+    }
 
-    // initialize the cache
-    unsafe {
-        // TODO this as_ref is kinda confusing as &CACHE gave me warning about
-        // https://github.com/rust-lang/rust/issues/114447
-        match CACHE.as_ref() {
-            // get value from cache
-            Some(cache) => return Ok(Rc::clone(cache.lock().unwrap().get(path.as_os_str()).unwrap())),
+    // get the value from cache if it exists
+    let cache_found = CACHE.with_borrow(|x| {
+        x
+            .get(path.as_os_str())
+            .map(|y| Rc::clone(y))
+    });
 
-            // cache not initialized
-            None => CACHE = Some(Mutex::new(HashMap::new())),
-        }
+    if let Some(x) = cache_found {
+        return Ok(x);
     }
 
     let cmd = {
@@ -71,22 +70,12 @@ pub fn get_keyframes(path: &Path) -> Result<Rc<Vec<Timestamp>>> {
             // the times may not be in correct order sometimes
             times.sort();
 
-            let times = unsafe {
-                CACHE.as_mut()
-                    .unwrap()
-                    .get_mut()
-                    .unwrap()
-                    .insert(path.as_os_str().to_owned(), Rc::new(times));
+            let times = Rc::new(times);
 
-                let cache = CACHE
-                    .as_ref()
-                    .unwrap()
-                    .lock()
-                    .unwrap();
-
-                // return cloned Rc
-                Rc::clone(cache.get(path.as_os_str()).unwrap())
-            };
+            // save into cache
+            CACHE.with_borrow_mut(|x: &mut HashMap<_, _>| {
+                x.insert(path.as_os_str().to_owned(), Rc::clone(&times));
+            });
 
             // save into cache and return reference
             Ok(times)
@@ -102,6 +91,9 @@ pub enum KeyframeMatch {
 
     /// Timestamp is between two timestamps ordered as: before, target, after
     Between(Timestamp, Timestamp, Timestamp),
+
+    /// The timestamp was not found, returns first or last keyframe
+    Boundary(Timestamp),
 }
 
 pub fn find_closest_keyframes(keyframes: &[Timestamp], span: (Option<Timestamp>, Option<Timestamp>)) -> Result<(KeyframeMatch, KeyframeMatch)> {
@@ -128,7 +120,7 @@ pub fn find_closest_keyframes(keyframes: &[Timestamp], span: (Option<Timestamp>,
         }
     } else {
         // just take the first one
-        KeyframeMatch::Exact(*keyframes.iter().next().unwrap())
+        KeyframeMatch::Boundary(*keyframes.iter().next().unwrap())
     };
 
     let end = if let Some(time) = span.1 {
@@ -153,7 +145,7 @@ pub fn find_closest_keyframes(keyframes: &[Timestamp], span: (Option<Timestamp>,
         }
     } else {
         // just take the last one
-        KeyframeMatch::Exact(*keyframes.iter().next_back().unwrap())
+        KeyframeMatch::Boundary(*keyframes.iter().next_back().unwrap())
     };
 
     Ok((start, end))
@@ -206,8 +198,8 @@ mod tests {
         assert_eq!(
             find_closest_keyframes(&keyframes, (None, None)).unwrap(),
             (
-                KeyframeMatch::Exact(0),
-                KeyframeMatch::Exact(8_000_000),
+                KeyframeMatch::Boundary(0),
+                KeyframeMatch::Boundary(8_000_000),
             )
         );
 
@@ -215,14 +207,14 @@ mod tests {
             find_closest_keyframes(&keyframes, (Some(1_500_000), None)).unwrap(),
             (
                 KeyframeMatch::Between(0, 1_500_000, 2_000_000),
-                KeyframeMatch::Exact(8_000_000),
+                KeyframeMatch::Boundary(8_000_000),
             )
         );
 
         assert_eq!(
             find_closest_keyframes(&keyframes, (None, Some(1_500_000))).unwrap(),
             (
-                KeyframeMatch::Exact(0),
+                KeyframeMatch::Boundary(0),
                 KeyframeMatch::Between(0, 1_500_000, 2_000_000),
             )
         );
